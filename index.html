@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Victoria Bus Stop Conditions — Community Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+:root {
+  --ink: #1a1a2e; --paper: #f5f0e8; --cream: #ede8db;
+  --accent: #c84b31; --accent2: #2e7d6e; --warn: #e8a020;
+  --pale: #f9f6f0; --border: #ccc5b5;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--paper); color: var(--ink); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+header { background: var(--ink); color: var(--paper); padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; border-bottom: 3px solid var(--accent); }
+header h1 { font-size: 1.25rem; font-weight: 700; }
+header h1 em { color: var(--accent); font-style: italic; }
+.htag { font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: #888; background: rgba(255,255,255,0.08); padding: 3px 7px; border-radius: 2px; margin-left: 10px; }
+.hbtns { display: flex; gap: 7px; }
+.btn { font-size: 0.7rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 7px 13px; border: none; border-radius: 3px; cursor: pointer; font-weight: 600; transition: all 0.15s; }
+.btn-p { background: var(--accent); color: white; }
+.btn-p:hover { background: #a83826; }
+.btn-g { background: transparent; color: var(--paper); border: 1px solid rgba(255,255,255,0.25); }
+.btn-g:hover { background: rgba(255,255,255,0.1); }
+
+.layout { display: flex; flex: 1; overflow: hidden; }
+
+/* SIDEBAR */
+.sidebar { width: 310px; flex-shrink: 0; background: var(--pale); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; transition: width 0.3s; }
+.sidebar.collapsed { width: 0; }
+.stabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.stab { flex: 1; padding: 9px; font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.06em; background: transparent; border: none; border-bottom: 2px solid transparent; cursor: pointer; color: #888; transition: all 0.15s; }
+.stab.active { color: var(--ink); border-bottom-color: var(--accent); background: var(--cream); }
+.tpanel { display: none; flex: 1; overflow-y: auto; padding: 13px; flex-direction: column; gap: 9px; }
+.tpanel.active { display: flex; }
+
+.hint { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.06em; color: #888; padding: 7px 9px; background: var(--cream); border-left: 3px solid var(--accent); border-radius: 2px; line-height: 1.5; }
+.hint b { color: var(--accent); }
+.fl { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.05em; color: #666; display: block; margin-bottom: 3px; margin-top: 3px; }
+input[type=text], textarea { width: 100%; font-size: 0.82rem; padding: 7px 8px; background: white; border: 1px solid var(--border); border-radius: 3px; color: var(--ink); outline: none; resize: none; font-family: inherit; }
+input[type=text]:focus, textarea:focus { border-color: var(--accent2); box-shadow: 0 0 0 2px rgba(46,125,110,0.12); }
+textarea { height: 68px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { font-size: 0.61rem; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 7px; border: 1px solid var(--border); border-radius: 2px; cursor: pointer; background: white; transition: all 0.12s; color: #666; user-select: none; }
+.chip:hover { border-color: var(--accent2); color: var(--accent2); }
+.chip.on { background: var(--accent2); border-color: var(--accent2); color: white; }
+
+.rgroup { display: flex; flex-direction: column; gap: 5px; }
+.rrow { display: flex; align-items: center; gap: 7px; }
+.rlbl { font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.04em; color: #777; width: 85px; flex-shrink: 0; }
+.stars { display: flex; gap: 3px; }
+.star { font-size: 15px; cursor: pointer; color: var(--border); transition: color 0.1s; user-select: none; }
+.star.on { color: var(--warn); }
+
+.coord { font-size: 0.68rem; font-family: monospace; padding: 6px 8px; background: var(--ink); color: #888; border-radius: 3px; }
+.coord span { color: #7ec8b0; }
+.subbtn { background: var(--accent); color: white; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; padding: 10px; border: none; border-radius: 3px; cursor: pointer; width: 100%; margin-top: 2px; font-weight: 700; transition: background 0.15s; }
+.subbtn:hover { background: #a83826; }
+.subbtn:disabled { background: #ccc; cursor: not-allowed; }
+
+/* REPORT LIST */
+.rcnt { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: #999; }
+.rcnt strong { color: var(--accent); }
+.rcard { background: white; border: 1px solid var(--border); border-radius: 4px; padding: 10px; cursor: pointer; transition: all 0.15s; border-left: 3px solid var(--border); margin-bottom: 5px; }
+.rcard:hover { border-left-color: var(--accent); transform: translateX(2px); }
+.rch { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; gap: 7px; }
+.rsn { font-weight: 600; font-size: 0.83rem; line-height: 1.2; flex: 1; }
+.rscore { font-size: 0.67rem; font-family: monospace; padding: 2px 5px; border-radius: 2px; white-space: nowrap; }
+.rscore.g { background: #d4edda; color: #2e7d6e; }
+.rscore.m { background: #fff3cd; color: #856404; }
+.rscore.b { background: #f8d7da; color: #c84b31; }
+.rex { font-size: 0.75rem; color: #666; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rmeta { display: flex; justify-content: space-between; margin-top: 5px; font-size: 0.59rem; color: #aaa; font-family: monospace; }
+.itags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+.itag { font-size: 0.59rem; text-transform: uppercase; padding: 2px 5px; border-radius: 2px; background: var(--cream); color: #666; border: 1px solid var(--border); }
+.empty { text-align: center; padding: 26px 10px; color: #aaa; }
+.empty .ei { font-size: 1.8rem; margin-bottom: 7px; }
+.empty p { font-size: 0.76rem; line-height: 1.5; }
+
+/* MAP */
+#map { flex: 1; }
+#map.picking { cursor: crosshair !important; }
+#map.picking .leaflet-container { cursor: crosshair !important; }
+
+/* LEGEND */
+.map-legend { background: rgba(245,240,232,0.95); border: 1px solid var(--border); border-radius: 4px; padding: 8px 12px; font-size: 0.61rem; text-transform: uppercase; letter-spacing: 0.05em; color: #666; line-height: 1.9; }
+.mlegr { display: flex; align-items: center; gap: 7px; }
+.mlegdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; border: 2px solid rgba(0,0,0,0.15); }
+
+/* MODAL */
+.modal-ov { display: none; position: fixed; inset: 0; background: rgba(26,26,46,0.55); z-index: 5000; align-items: center; justify-content: center; }
+.modal-ov.open { display: flex; }
+.modal { background: var(--pale); border: 1px solid var(--border); border-radius: 6px; width: 390px; max-width: 95vw; max-height: 88vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: mIn 0.2s ease; }
+@keyframes mIn { from{opacity:0;transform:translateY(-10px) scale(0.97)} to{opacity:1;transform:none} }
+.mhdr { padding: 13px 17px 9px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; }
+.mtitle { font-size: 1.05rem; font-weight: 700; line-height: 1.2; }
+.msub { font-size: 0.61rem; text-transform: uppercase; letter-spacing: 0.06em; color: #888; margin-top: 2px; font-family: monospace; }
+.mclose { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #888; padding: 0; }
+.mclose:hover { color: var(--accent); }
+.mbody { padding: 13px 17px 17px; display: flex; flex-direction: column; gap: 9px; }
+.drow { display: flex; gap: 7px; }
+.dicon { font-size: 0.9rem; flex-shrink: 0; margin-top: 2px; }
+.dtxt { font-size: 0.8rem; line-height: 1.5; color: #444; }
+.brrow { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
+.brlbl { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; width: 78px; color: #777; }
+.brtrack { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.brfill { height: 100%; border-radius: 3px; background: var(--accent2); }
+.brnum { font-size: 0.62rem; color: #888; width: 16px; text-align: right; font-family: monospace; }
+
+/* LEAFLET POPUP */
+.leaflet-popup-content-wrapper { border-radius: 4px; font-family: 'Segoe UI', Arial, sans-serif; background: var(--pale); border: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+.leaflet-popup-content { margin: 10px 14px; }
+.popup-name { font-weight: 700; font-size: 0.9rem; margin-bottom: 3px; }
+.popup-exc { font-size: 0.75rem; color: #555; line-height: 1.4; }
+.popup-btn { display: inline-block; margin-top: 7px; font-size: 0.63rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 4px 9px; background: var(--accent); color: white; border-radius: 2px; cursor: pointer; border: none; font-family: inherit; transition: background 0.15s; }
+.popup-btn:hover { background: #a83826; }
+
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(14px); background: var(--ink); color: var(--paper); font-size: 0.7rem; padding: 8px 16px; border-radius: 3px; z-index: 9999; opacity: 0; transition: all 0.2s; pointer-events: none; white-space: nowrap; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:baseline;gap:8px">
+    <h1>Victoria Bus Stop <em>Conditions</em></h1>
+    <span class="htag">Community Audit · ES407</span>
+  </div>
+  <div class="hbtns">
+    <button class="btn btn-g" id="toggleSB">☰ Panel</button>
+    <button class="btn btn-p" id="startPick">＋ Report a Stop</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="stabs">
+      <button class="stab active" data-tab="report">Report</button>
+      <button class="stab" data-tab="list">All Reports</button>
+    </div>
+
+    <!-- REPORT TAB -->
+    <div class="tpanel active" id="tab-report">
+      <div class="hint" id="hint"><b>Step 1</b> — Click <strong>"Report a Stop"</strong>, then click your stop on the map.</div>
+      <div id="ff" style="display:none;flex-direction:column;gap:8px">
+        <div>
+          <label class="fl">Bus Stop / Location Name</label>
+          <input type="text" id="sname" placeholder="e.g. Douglas & Fort, Stop #4012"/>
+        </div>
+        <div>
+          <label class="fl">Your Experience</label>
+          <textarea id="exp" placeholder="Lighting, shelter, seating, accessibility, safety…"></textarea>
+        </div>
+        <div>
+          <label class="fl">Issues Present</label>
+          <div class="chips" id="chips">
+            <span class="chip" data-v="No shelter">No shelter</span>
+            <span class="chip" data-v="Poor lighting">Poor lighting</span>
+            <span class="chip" data-v="No seating">No seating</span>
+            <span class="chip" data-v="Muddy/unpaved">Muddy/unpaved</span>
+            <span class="chip" data-v="No schedule info">No schedule info</span>
+            <span class="chip" data-v="Accessibility barriers">Accessibility barriers</span>
+            <span class="chip" data-v="Safety concerns">Safety concerns</span>
+            <span class="chip" data-v="Vandalism">Vandalism</span>
+          </div>
+        </div>
+        <div>
+          <label class="fl">Rate the Stop</label>
+          <div class="rgroup">
+            <div class="rrow"><span class="rlbl">Safety</span><div class="stars" data-cat="safety"><span class="star" data-v="1">★</span><span class="star" data-v="2">★</span><span class="star" data-v="3">★</span><span class="star" data-v="4">★</span><span class="star" data-v="5">★</span></div></div>
+            <div class="rrow"><span class="rlbl">Shelter</span><div class="stars" data-cat="shelter"><span class="star" data-v="1">★</span><span class="star" data-v="2">★</span><span class="star" data-v="3">★</span><span class="star" data-v="4">★</span><span class="star" data-v="5">★</span></div></div>
+            <div class="rrow"><span class="rlbl">Accessibility</span><div class="stars" data-cat="accessibility"><span class="star" data-v="1">★</span><span class="star" data-v="2">★</span><span class="star" data-v="3">★</span><span class="star" data-v="4">★</span><span class="star" data-v="5">★</span></div></div>
+            <div class="rrow"><span class="rlbl">Comfort</span><div class="stars" data-cat="comfort"><span class="star" data-v="1">★</span><span class="star" data-v="2">★</span><span class="star" data-v="3">★</span><span class="star" data-v="4">★</span><span class="star" data-v="5">★</span></div></div>
+          </div>
+        </div>
+        <div class="coord" id="coord">No location selected yet.</div>
+        <button class="subbtn" id="subBtn" disabled>Submit Report</button>
+      </div>
+    </div>
+
+    <!-- LIST TAB -->
+    <div class="tpanel" id="tab-list">
+      <div class="rcnt" id="rcnt">No reports yet.</div>
+      <div id="rlist"></div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div id="map"></div>
+
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-ov" id="modal">
+  <div class="modal">
+    <div class="mhdr">
+      <div><div class="mtitle" id="mt"></div><div class="msub" id="ms"></div></div>
+      <button class="mclose" id="mclose">✕</button>
+    </div>
+    <div class="mbody" id="mb"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── MAP INIT — YOUR WORKING TILE LAYER UNTOUCHED ────────────────────────────
+var map = L.map('map', { zoomControl: false }).setView([48.44089424133312, -123.34617667647568], 14);
+
+L.tileLayer('https://api.maptiler.com/maps/streets-v4/{z}/{x}/{y}.png?key=W2iZRSNyjqkhm5RRmz5B', {
+  attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
+}).addTo(map);
+
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+// Legend
+const legend = L.control({ position: 'bottomright' });
+legend.onAdd = function() {
+  const div = L.DomUtil.create('div', 'map-legend');
+  div.innerHTML = `
+    <div class="mlegr"><div class="mlegdot" style="background:#c84b31"></div> Poor (1–2★)</div>
+    <div class="mlegr"><div class="mlegdot" style="background:#e8a020"></div> Moderate (3★)</div>
+    <div class="mlegr"><div class="mlegdot" style="background:#2e7d6e"></div> Good (4–5★)</div>
+  `;
+  return div;
+};
+legend.addTo(map);
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let picking = false;
+let pendingLatLng = null;
+let tempMarker = null;
+let reports = [];
+let ratings = { safety:0, shelter:0, accessibility:0, comfort:0 };
+const SK = 'vs_bs_v4';
+
+// ─── MARKER ICONS ────────────────────────────────────────────────────────────
+function makeIcon(color) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)"></div>`,
+    iconSize: [16,16], iconAnchor: [8,8], popupAnchor: [0,-10]
+  });
+}
+
+const tempIcon = L.divIcon({
+  className: '',
+  html: `<div style="width:16px;height:16px;border-radius:50%;background:#555;border:3px dashed #aaa;box-shadow:0 2px 8px rgba(0,0,0,0.3)"></div>`,
+  iconSize: [16,16], iconAnchor: [8,8]
+});
+
+function scoreCol(avg) {
+  if (!avg) return '#888';
+  if (avg >= 4) return '#2e7d6e';
+  if (avg >= 3) return '#e8a020';
+  return '#c84b31';
+}
+
+// ─── MAP CLICK ───────────────────────────────────────────────────────────────
+map.on('click', function(e) {
+  if (!picking) return;
+  pendingLatLng = e.latlng;
+  if (tempMarker) map.removeLayer(tempMarker);
+  tempMarker = L.marker(pendingLatLng, { icon: tempIcon }).addTo(map);
+  document.getElementById('coord').innerHTML = `📍 <span>${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}</span>`;
+  document.getElementById('subBtn').disabled = false;
+  stopPick();
+  showToast('Location pinned! Fill the form and submit.');
+});
+
+// ─── PICKING MODE ────────────────────────────────────────────────────────────
+function startPick() {
+  picking = true;
+  map.getContainer().classList.add('picking');
+  document.getElementById('startPick').textContent = '✕ Cancel';
+  document.getElementById('startPick').style.background = '#555';
+  switchTab('report');
+  document.getElementById('hint').innerHTML = '<b>Step 2</b> — Click anywhere on the map to drop your pin.';
+  const ff = document.getElementById('ff');
+  ff.style.display = 'flex'; ff.style.flexDirection = 'column'; ff.style.gap = '8px';
+  showToast('Click the map to place your pin');
+}
+
+function stopPick() {
+  picking = false;
+  map.getContainer().classList.remove('picking');
+  document.getElementById('startPick').textContent = '＋ Report a Stop';
+  document.getElementById('startPick').style.background = '';
+  document.getElementById('hint').innerHTML = '<b>Step 3</b> — Fill in the form, then submit.';
+}
+
+document.getElementById('startPick').addEventListener('click', () => {
+  if (picking) { stopPick(); return; }
+  startPick();
+});
+
+// ─── STARS ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('.stars').forEach(grp => {
+  const cat = grp.dataset.cat;
+  grp.querySelectorAll('.star').forEach(s => {
+    s.addEventListener('click', () => {
+      const v = +s.dataset.v;
+      ratings[cat] = v;
+      grp.querySelectorAll('.star').forEach(x => x.classList.toggle('on', +x.dataset.v <= v));
+    });
+  });
+});
+
+// ─── CHIPS ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => c.classList.toggle('on')));
+
+// ─── ADD MARKER TO MAP ───────────────────────────────────────────────────────
+function addMarker(r) {
+  const marker = L.marker([r.lat, r.lng], { icon: makeIcon(scoreCol(r.avgRating)) }).addTo(map);
+  marker.bindPopup(`
+    <div class="popup-name">${esc(r.name)}</div>
+    <div class="popup-exc">${esc(r.experience.substring(0,80))}${r.experience.length>80?'…':''}</div>
+    <button class="popup-btn" onclick="openModal(${r.id})">View Details</button>
+  `);
+}
+
+// ─── SUBMIT ──────────────────────────────────────────────────────────────────
+document.getElementById('subBtn').addEventListener('click', async () => {
+  const name = document.getElementById('sname').value.trim();
+  const exp  = document.getElementById('exp').value.trim();
+  if (!name) { showToast('Please enter a stop name.'); return; }
+  if (!exp)  { showToast('Please describe your experience.'); return; }
+  if (!pendingLatLng) { showToast('Please pin a location first.'); return; }
+
+  const issues = [...document.querySelectorAll('.chip.on')].map(c => c.dataset.v);
+  const vals = Object.values(ratings).filter(v => v > 0);
+  const avg = vals.length ? parseFloat((vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2)) : 0;
+
+  const rep = {
+    id: Date.now(), name, experience: exp, issues,
+    ratings: {...ratings}, avgRating: avg,
+    lat: pendingLatLng.lat, lng: pendingLatLng.lng,
+    date: new Date().toLocaleDateString('en-CA', {year:'numeric',month:'short',day:'numeric'})
+  };
+
+  reports.push(rep);
+  await saveR();
+  addMarker(rep);
+  renderList();
+
+  // Reset form
+  document.getElementById('sname').value = '';
+  document.getElementById('exp').value = '';
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+  document.querySelectorAll('.star').forEach(s => s.classList.remove('on'));
+  ratings = { safety:0, shelter:0, accessibility:0, comfort:0 };
+  pendingLatLng = null;
+  if (tempMarker) { map.removeLayer(tempMarker); tempMarker = null; }
+  document.getElementById('subBtn').disabled = true;
+  document.getElementById('coord').innerHTML = 'No location selected yet.';
+  document.getElementById('ff').style.display = 'none';
+  document.getElementById('hint').innerHTML = '<b>Step 1</b> — Click <strong>"Report a Stop"</strong>, then click your stop on the map.';
+  showToast('✓ Submitted! Thank you.');
+  switchTab('list');
+});
+
+// ─── STORAGE ─────────────────────────────────────────────────────────────────
+async function saveR() {
+  try { await window.storage.set(SK, JSON.stringify(reports), true); } catch(e) {}
+}
+async function loadR() {
+  try {
+    const r = await window.storage.get(SK, true);
+    reports = r ? JSON.parse(r.value) : [];
+  } catch(e) { reports = []; }
+}
+
+// ─── REPORT LIST ─────────────────────────────────────────────────────────────
+function renderList() {
+  const el  = document.getElementById('rlist');
+  const cnt = document.getElementById('rcnt');
+  cnt.innerHTML = `<strong>${reports.length}</strong> report${reports.length!==1?'s':''} submitted`;
+  if (!reports.length) {
+    el.innerHTML = `<div class="empty"><div class="ei">🗺️</div><p>No reports yet.<br/>Be the first to document a stop!</p></div>`;
+    return;
+  }
+  el.innerHTML = [...reports].reverse().map(r => {
+    const avg = r.avgRating || 0;
+    const sc  = avg>=4?'g':avg>=3?'m':'b';
+    const tags = (r.issues||[]).slice(0,3).map(i=>`<span class="itag">${esc(i)}</span>`).join('');
+    return `<div class="rcard" onclick="openModal(${r.id}); map.setView([${r.lat},${r.lng}],16);">
+      <div class="rch"><div class="rsn">${esc(r.name)}</div><span class="rscore ${sc}">${avg>0?'★'+avg.toFixed(1):'?'}</span></div>
+      <div class="rex">${esc(r.experience)}</div>
+      ${tags?`<div class="itags">${tags}</div>`:''}
+      <div class="rmeta"><span>${r.date}</span><span>${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}</span></div>
+    </div>`;
+  }).join('');
+}
+
+// ─── MODAL ───────────────────────────────────────────────────────────────────
+window.openModal = function(id) {
+  const r = reports.find(x=>x.id===id); if(!r) return;
+  document.getElementById('mt').textContent = r.name;
+  document.getElementById('ms').textContent = `Reported ${r.date} · ${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}`;
+  const bars = ['safety','shelter','accessibility','comfort'].map(cat => {
+    const v = r.ratings[cat]||0;
+    return `<div class="brrow"><span class="brlbl">${cat}</span><div class="brtrack"><div class="brfill" style="width:${v*20}%"></div></div><span class="brnum">${v||'—'}</span></div>`;
+  }).join('');
+  const tags = (r.issues||[]).map(i=>`<span class="itag">${esc(i)}</span>`).join('');
+  document.getElementById('mb').innerHTML = `
+    <div class="drow"><span class="dicon">💬</span><span class="dtxt">${esc(r.experience)}</span></div>
+    ${tags?`<div class="itags">${tags}</div>`:''}
+    <div><label class="fl" style="margin-bottom:7px">Condition Ratings</label>${bars}</div>
+    ${r.avgRating>0?`<div style="font-size:.7rem;color:#888">Overall: <strong style="color:${scoreCol(r.avgRating)}">${r.avgRating.toFixed(1)}/5</strong></div>`:''}
+  `;
+  document.getElementById('modal').classList.add('open');
+};
+
+document.getElementById('mclose').onclick = () => document.getElementById('modal').classList.remove('open');
+document.getElementById('modal').onclick = e => { if(e.target===document.getElementById('modal')) document.getElementById('modal').classList.remove('open'); };
+
+// ─── TABS ────────────────────────────────────────────────────────────────────
+function switchTab(n) {
+  document.querySelectorAll('.stab').forEach(b => b.classList.toggle('active', b.dataset.tab===n));
+  document.querySelectorAll('.tpanel').forEach(p => p.classList.toggle('active', p.id===`tab-${n}`));
+}
+document.querySelectorAll('.stab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+// ─── SIDEBAR TOGGLE ──────────────────────────────────────────────────────────
+document.getElementById('toggleSB').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+  setTimeout(() => map.invalidateSize(), 310);
+});
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+let tt;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+(async () => {
+  await loadR();
+  reports.forEach(addMarker);
+  renderList();
+})();
+
+</script>
+
+<script>
+const firebaseConfig = {
+  apiKey:            "AIzaSyCSrfT3bhII5MysWLAteSC3SIHYP_WPnes",
+  authDomain:        "vic-bus-catalog.firebaseapp.com",
+  projectId:         "vic-bus-catalog",
+  storageBucket:     "vic-bus-catalog.firebasestorage.app",
+  messagingSenderId: "775735499418",
+  appId:             "1:775735499418:web:2078a11369b5f124ef5d23"
+};
+</script>
+
+</body>
+</html>
